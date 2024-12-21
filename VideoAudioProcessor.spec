@@ -4,7 +4,7 @@
 a = Analysis(
     ['app.py'],
     pathex=[],
-    binaries=[],
+    binaries=[('/opt/homebrew/bin/ffmpeg', 'bin'), ('/opt/homebrew/anaconda3/bin/demucs', 'bin')],
     datas=[],
     hiddenimports=[],
     hookspath=[],

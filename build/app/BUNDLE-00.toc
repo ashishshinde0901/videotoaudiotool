@@ -1,1 +1,0 @@
-([('app', '/Users/manishshinde/Desktop/vtoa/project/dist/app', 'EXECUTABLE')],)

@@ -1,0 +1,3 @@
+([('VideoAudioProcessor-2',
+   '/Users/manishshinde/Desktop/vtoa/project/dist/VideoAudioProcessor-2',
+   'EXECUTABLE')],)
