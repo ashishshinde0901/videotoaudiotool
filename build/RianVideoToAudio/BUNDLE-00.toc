@@ -1,3 +1,0 @@
-([('RianVideoToAudio',
-   '/Users/manishshinde/Desktop/vtoa/project/dist/RianVideoToAudio',
-   'EXECUTABLE')],)
