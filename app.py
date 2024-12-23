@@ -1,13 +1,11 @@
-# app.py (or your main GUI script)
-
 import os
 import stat
 import tempfile
-from pathlib import Path
-from tkinter import filedialog, messagebox, Tk, Label, Button, Frame, StringVar
 import sys
+from pathlib import Path
+from tkinter import filedialog, messagebox, Tk, Label, Button, Frame, StringVar, Toplevel, Text, Scrollbar, RIGHT, Y, END
 
-# Import the process_video function from video_processor.py
+# Import from our local video_processor.py
 from video_processor import process_video
 
 def fix_permissions_in_meipass():
@@ -18,21 +16,20 @@ def fix_permissions_in_meipass():
     if hasattr(sys, "_MEIPASS"):  
         bin_dir = Path(sys._MEIPASS) / "bin"
         for binary in bin_dir.iterdir():
-            # Make sure it's executable by user/group/others
             binary.chmod(binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 def main():
     """Main application logic."""
-    # Fix binary permissions for bundled environment
     fix_permissions_in_meipass()
 
     root = Tk()
     root.title("Video Audio Processor")
-    root.geometry("600x400")
+    root.geometry("600x440")
     root.resizable(False, False)
     root.configure(bg="#f4f4f9")
 
     selected_file_path = StringVar(value="No file selected")
+    demucs_logs = ["", ""]  # [stdout, stderr] placeholders
 
     def select_file():
         """Open file dialog to select a video file."""
@@ -53,7 +50,8 @@ def main():
                 root.update_idletasks()
 
                 # Call the processing function
-                vocals_path, noise_path = process_video(file_path, temp_dir_path)
+                vocals_path, noise_path, logs = process_video(file_path, temp_dir_path)
+                demucs_logs[0], demucs_logs[1] = logs  # Store logs for viewing later
 
                 status_label.config(text="Processing Complete!", fg="green")
                 messagebox.showinfo("Success", "Audio separation completed!")
@@ -61,6 +59,9 @@ def main():
                 # Prompt user to save files
                 save_file(vocals_path, "Save Clean Audio (Vocals)")
                 save_file(noise_path, "Save Background Noise")
+
+                # Enable "View Logs" button now that we have logs
+                view_logs_button.config(state="normal")
 
             except FileNotFoundError as e:
                 status_label.config(text="Processing Failed", fg="red")
@@ -88,11 +89,37 @@ def main():
         )
         if save_path:
             try:
-                # Using rename can cause issues if saving across different drives; consider shutil.move if needed
                 os.rename(file_path, save_path)
                 messagebox.showinfo("Download Complete", f"File saved to: {save_path}")
             except Exception as e:
                 messagebox.showerror("Save Error", f"Failed to save file: {e}")
+
+    def show_logs_window():
+        """
+        Opens a new window to display the captured Demucs logs 
+        (stdout and stderr) in a scrollable Text widget.
+        """
+        log_window = Toplevel(root)
+        log_window.title("Demucs Logs")
+        log_window.geometry("600x300")
+
+        # Create a scrollable text widget
+        text_area = Text(log_window, wrap="word")
+        scrollbar = Scrollbar(log_window, command=text_area.yview)
+        text_area.configure(yscrollcommand=scrollbar.set)
+
+        # Place the text widget and scrollbar
+        text_area.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side=RIGHT, fill=Y)
+
+        # Insert the logs into the text widget
+        stdout_text = demucs_logs[0]
+        stderr_text = demucs_logs[1]
+        combined_logs = f"=== DEMUCS STDOUT ===\n{stdout_text}\n\n=== DEMUCS STDERR ===\n{stderr_text}\n"
+        text_area.insert(END, combined_logs)
+
+        # Make read-only
+        text_area.config(state="disabled")
 
     # UI Components
     Label(
@@ -111,7 +138,7 @@ def main():
     ).pack(pady=5)
 
     file_frame = Frame(root, bg="#f4f4f9")
-    file_frame.pack(pady=20)
+    file_frame.pack(pady=10)
 
     Button(
         file_frame,
@@ -129,10 +156,23 @@ def main():
         bg="#f4f4f9",
         fg="gray",
         font=("Helvetica", 12),
-    ).pack(pady=5)
+    ).pack()
 
     status_label = Label(root, text="Ready.", bg="#f4f4f9", fg="black", font=("Helvetica", 12))
     status_label.pack(pady=10)
+
+    # Button to open log window, initially disabled
+    view_logs_button = Button(
+        root,
+        text="View Logs",
+        command=show_logs_window,
+        bg="#6c757d",
+        fg="white",
+        font=("Helvetica", 12),
+        width=10,
+        state="disabled"
+    )
+    view_logs_button.pack(pady=5)
 
     Button(
         root,
@@ -146,6 +186,5 @@ def main():
 
     root.mainloop()
 
-# IMPORTANT: Fix the __name__ check here
 if __name__ == "__main__":
     main()
