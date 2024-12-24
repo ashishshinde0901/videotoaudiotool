@@ -14,13 +14,19 @@ from video_processor import process_video, get_bundled_path
 def send_log_to_server(log_data):
     """Send log data to the server."""
     try:
-        server_url = "http://127.0.0.1:5175/log"  # Update this as necessary
+        server_url = "http://127.0.0.1:5175/log"  # The server endpoint
+        print(f"Sending log data: {log_data}")  # Debugging output for logs
         response = requests.post(server_url, json=log_data, timeout=10)
         response.raise_for_status()
         print("Log sent successfully to the server.")
-    except requests.RequestException as e:
-        print(f"Failed to send log to server: {e}")
-        messagebox.showerror("Server Error", f"Failed to send log to server: {e}")
+    except requests.HTTPError as http_err:
+        print(f"HTTP error occurred: {http_err}")  # Detailed HTTP error
+        response_content = response.content.decode() if response else "No response content"
+        print(f"Server response: {response_content}")
+        messagebox.showerror("Server Error", f"Failed to send log to server: {http_err}")
+    except requests.RequestException as req_err:
+        print(f"Request error occurred: {req_err}")
+        messagebox.showerror("Server Error", f"Failed to send log to server: {req_err}")
 
 
 def download_youtube_video(link, temp_dir):
