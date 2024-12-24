@@ -1,4 +1,5 @@
 import os
+import shutil
 import tempfile
 import subprocess
 import requests
@@ -8,8 +9,10 @@ import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk, Toplevel, Text
+
 import customtkinter as ctk
 from moviepy.video.io.VideoFileClip import VideoFileClip
+
 from video_processor import process_video, get_bundled_path
 
 LOG_FILE = os.path.join(tempfile.gettempdir(), "rian_tool_logs.txt")
@@ -75,14 +78,17 @@ def get_video_length(video_path):
         return None
 
 def save_file(file_path, title):
-    """Prompt the user to save a file."""
+    """
+    Prompt the user to save a file, then move the file from 'file_path'
+    to the chosen location using shutil.move (handles cross-drive moves).
+    """
     save_path = filedialog.asksaveasfilename(
         title=title,
         defaultextension=file_path.suffix,
         filetypes=[("MP4 Files", "*.mp4"), ("WAV Files", "*.wav"), ("All Files", "*.*")],
     )
     if save_path:
-        os.rename(file_path, save_path)
+        shutil.move(str(file_path), save_path)  # Use shutil.move instead of os.rename
         append_to_log(f"File saved: {save_path}")
         messagebox.showinfo("File Saved", f"Saved as: {save_path}")
     else:
@@ -197,15 +203,27 @@ class RianVideoProcessingTool(ctk.CTk):
 
         progress_label.set("Downloading video... Please wait.")
         start_time = datetime.now()
+
+        # Pre-declare for logging, just in case an exception happens
+        file_size = None
+        video_length = None
+
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
+                # 1) Download into the temp directory
                 video_path = download_youtube_video(link, temp_dir)
+
+                # 2) Gather file size & duration while still in temp_dir
+                file_size = os.path.getsize(video_path)
+                video_length_seconds = get_video_length(video_path)
+                video_length = format_duration(video_length_seconds) if video_length_seconds else None
+
+                # 3) Prompt user to save (this moves the file out of temp_dir)
                 save_file(video_path, "Save Downloaded Video")
 
+            # After exiting 'with', temp_dir is deleted, so don't reference video_path anymore
+
             end_time = datetime.now()
-            file_size = os.path.getsize(video_path)
-            video_length_seconds = get_video_length(video_path)
-            video_length = format_duration(video_length_seconds) if video_length_seconds else None
 
             log_data = {
                 "ip": socket.gethostbyname(socket.gethostname()),
@@ -317,11 +335,15 @@ class RianVideoProcessingTool(ctk.CTk):
         progress_label.set("Processing video... Please wait.")
         start_time = datetime.now()
         try:
+            # Get length of the original file
             video_length_seconds = get_video_length(file_path)
             video_length = format_duration(video_length_seconds) if video_length_seconds else None
 
             with tempfile.TemporaryDirectory() as temp_dir:
+                # Process the video (splitting etc.)
                 vocals_path, noise_path, _ = process_video(file_path, Path(temp_dir))
+
+                # Let user save each resulting file
                 save_file(vocals_path, "Save Vocals as WAV")
                 save_file(noise_path, "Save Background Noise as WAV")
 
@@ -345,6 +367,7 @@ class RianVideoProcessingTool(ctk.CTk):
             }
             send_log_to_server(log_data)
             progress_label.set(f"Video processed successfully in {log_data['processing_time']:.2f} seconds.")
+
         except Exception as e:
             error_message = f"Unexpected error during video processing: {e}"
             progress_label.set("Processing failed.")
