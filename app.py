@@ -9,7 +9,8 @@ import socket
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, Tk, Label, Button, Frame, StringVar, Entry, Toplevel, Text, Scrollbar, RIGHT, Y, END
-from video_processor import process_video
+from moviepy.editor import VideoFileClip  # For video length calculation
+from video_processor import process_video, get_bundled_path
 
 
 def fix_permissions_in_meipass():
@@ -54,6 +55,16 @@ def download_youtube_video(link, output_dir):
         raise RuntimeError(f"yt-dlp failed: {e.stderr.decode(errors='ignore')}")
 
 
+def get_video_length(video_path):
+    """Get the length of a video in seconds."""
+    try:
+        with VideoFileClip(str(video_path)) as video:
+            return round(video.duration, 2)
+    except Exception as e:
+        print(f"Error calculating video length: {e}")
+        return None
+
+
 def main():
     fix_permissions_in_meipass()
 
@@ -75,7 +86,8 @@ def main():
         )
         if file_path:
             selected_file_path.set(file_path)
-            start_processing(file_path, upload_type="local")
+            video_length = get_video_length(file_path)
+            start_processing(file_path, upload_type="local", video_length=video_length)
 
     def process_youtube_video():
         """Download and process a video from a YouTube link."""
@@ -85,22 +97,40 @@ def main():
             return
 
         try:
-            # Step 1: Download YouTube video
             status_label.config(text="Downloading video... Please wait.", fg="#007bff")
             root.update_idletasks()
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_file_path = download_youtube_video(link, temp_dir)
-                status_label.config(text="Video downloaded. Processing...", fg="#007bff")
+                video_length = get_video_length(temp_file_path)
+                status_label.config(text="Video downloaded successfully.", fg="green")
                 root.update_idletasks()
 
-                # Step 2: Process the downloaded video
-                start_processing(temp_file_path, upload_type="youtube")
-        except Exception as e:
-            status_label.config(text="Processing Failed", fg="red")
-            messagebox.showerror("Error", f"Failed to process YouTube video: {e}")
+                # Send logs for the download event
+                log_data = {
+                    "ip": socket.gethostbyname(socket.gethostname()),  # Local IP
+                    "machine_name": socket.gethostname(),
+                    "machine_specs": {
+                        "os": platform.system(),
+                        "os_version": platform.version(),
+                        "machine": platform.machine(),
+                    },
+                    "start_time": datetime.now().isoformat(),
+                    "end_time": datetime.now().isoformat(),
+                    "file_size": os.path.getsize(temp_file_path),
+                    "video_length": video_length,
+                    "upload_type": "youtube",
+                    "status": "success",
+                    "error_logs": None,
+                }
+                send_log_to_server(log_data)
 
-    def start_processing(file_path, upload_type):
+                messagebox.showinfo("Success", "Video downloaded successfully!")
+        except Exception as e:
+            status_label.config(text="Download Failed", fg="red")
+            messagebox.showerror("Error", f"Failed to download YouTube video: {e}")
+
+    def start_processing(file_path, upload_type, video_length):
         """Start video processing."""
         start_time = datetime.now()
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -128,9 +158,9 @@ def main():
                     "start_time": start_time.isoformat(),
                     "end_time": end_time.isoformat(),
                     "file_size": os.path.getsize(file_path),
-                    "video_length": None,  # Optionally extract with FFmpeg
+                    "video_length": video_length,
                     "processing_time": processing_time,
-                    "upload_type": upload_type,  # New: YouTube or Local
+                    "upload_type": upload_type,
                     "status": "success",
                     "error_logs": None,
                 }
@@ -144,7 +174,6 @@ def main():
                 save_file(noise_path, "Save Background Noise")
 
             except Exception as e:
-                # Failure
                 end_time = datetime.now()
                 processing_time = (end_time - start_time).total_seconds()
 
@@ -159,9 +188,9 @@ def main():
                     "start_time": start_time.isoformat(),
                     "end_time": end_time.isoformat(),
                     "file_size": os.path.getsize(file_path) if os.path.exists(file_path) else None,
-                    "video_length": None,  # Optionally extract with FFmpeg
+                    "video_length": video_length,
                     "processing_time": processing_time,
-                    "upload_type": upload_type,  # New: YouTube or Local
+                    "upload_type": upload_type,
                     "status": "failure",
                     "error_logs": str(e),
                 }

@@ -3,9 +3,8 @@ import sys
 import io
 import shutil
 from pathlib import Path
-
-# We'll use a standard-library context manager to capture output
 import contextlib
+
 
 def get_bundled_path(executable_name):
     """
@@ -61,13 +60,10 @@ def process_video(file_path, temp_dir):
         raise FileNotFoundError(f"Input file does not exist or is not a valid file: {file_path}")
 
     try:
-        # 1. Locate FFmpeg
-        try:
-            ffmpeg_path = get_bundled_path("ffmpeg.exe")
-        except Exception as e:
-            raise RuntimeError(f"Failed to locate FFmpeg: {e}")
+        # Locate FFmpeg
+        ffmpeg_path = get_bundled_path("ffmpeg.exe")
 
-        # 2. Extract audio from the video using FFmpeg
+        # Extract audio from the video using FFmpeg
         audio_path = Path(temp_dir) / "extracted_audio.mp3"
         ffmpeg_command = [
             ffmpeg_path,
@@ -78,16 +74,13 @@ def process_video(file_path, temp_dir):
         ]
 
         try:
-            # Capture FFmpeg logs in case you want to debug them as well
+            # Capture FFmpeg logs for debugging
             result = subprocess.run(
                 ffmpeg_command,
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE
             )
-            # Optionally inspect FFmpeg logs here:
-            # ffmpeg_stdout = result.stdout.decode(errors="ignore")
-            # ffmpeg_stderr = result.stderr.decode(errors="ignore")
         except subprocess.CalledProcessError as e:
             raise RuntimeError(
                 f"FFmpeg command failed with error code {e.returncode}. "
@@ -97,8 +90,7 @@ def process_video(file_path, temp_dir):
         if not audio_path.is_file():
             raise FileNotFoundError("Audio extraction failed; no audio file generated.")
 
-        # 3. Run Demucs to separate audio
-        #    We'll capture stdout/stderr so we can display them in our GUI
+        # Run Demucs to separate audio
         try:
             from demucs.separate import main as demucs_main
         except ImportError:
@@ -125,7 +117,7 @@ def process_video(file_path, temp_dir):
             demucs_stdout = demucs_out.getvalue()
             demucs_stderr = demucs_err.getvalue()
 
-        # 4. Verify output files from Demucs
+        # Verify output files from Demucs
         demucs_output_dir = Path(temp_dir) / "mdx_extra_q" / audio_path.stem
         vocals_path = demucs_output_dir / "vocals.wav"
         noise_path = demucs_output_dir / "no_vocals.wav"
