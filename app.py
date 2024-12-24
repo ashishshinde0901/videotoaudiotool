@@ -45,6 +45,9 @@ def send_log_to_server(log_data):
 def download_youtube_video(link, temp_dir):
     """Download a YouTube video and store it in a temporary directory."""
     yt_dlp_path = get_bundled_path("yt-dlp.exe")
+    if not os.path.exists(yt_dlp_path):
+        raise FileNotFoundError(f"yt-dlp executable not found at {yt_dlp_path}")
+
     output_path = Path(temp_dir) / "youtube_video.mp4"
     command = [
         yt_dlp_path,
@@ -52,8 +55,15 @@ def download_youtube_video(link, temp_dir):
         "-o", str(output_path),
         link,
     ]
-    subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    return output_path
+    try:
+        subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if not output_path.exists():
+            raise FileNotFoundError(f"Video file not found at {output_path}")
+        return output_path
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"yt-dlp failed: {e.stderr.decode('utf-8')}")
+    except Exception as e:
+        raise RuntimeError(f"Unexpected error during video download: {e}")
 
 def get_video_length(video_path):
     """Calculate the length of a video in seconds."""
@@ -194,6 +204,8 @@ class RianVideoProcessingTool(ctk.CTk):
 
             end_time = datetime.now()
             file_size = os.path.getsize(video_path)
+            video_length_seconds = get_video_length(video_path)
+            video_length = format_duration(video_length_seconds) if video_length_seconds else None
 
             log_data = {
                 "ip": socket.gethostbyname(socket.gethostname()),
@@ -206,14 +218,15 @@ class RianVideoProcessingTool(ctk.CTk):
                 "start_time": start_time.isoformat(),
                 "end_time": end_time.isoformat(),
                 "file_size": file_size,
+                "video_length": video_length,
                 "processing_time": calculate_processing_time(start_time, end_time),
                 "type": "youtube",
                 "status": "success",
             }
             send_log_to_server(log_data)
             progress_label.set(f"Video downloaded successfully in {log_data['processing_time']:.2f} seconds.")
-        except Exception as e:
-            error_message = f"Download failed: {e}"
+        except FileNotFoundError as fnf_err:
+            error_message = f"File not found: {fnf_err}"
             append_to_log(error_message)
             progress_label.set("Download failed.")
             send_log_to_server({
@@ -227,10 +240,53 @@ class RianVideoProcessingTool(ctk.CTk):
                 "start_time": start_time.isoformat(),
                 "end_time": datetime.now().isoformat(),
                 "file_size": None,
+                "video_length": None,
                 "processing_time": calculate_processing_time(start_time, datetime.now()),
                 "type": "youtube",
                 "status": "failure",
-                "error_logs": error_message,
+                "error_logs": str(fnf_err),
+            })
+        except RuntimeError as rt_err:
+            error_message = f"Runtime error during download: {rt_err}"
+            append_to_log(error_message)
+            progress_label.set("Download failed.")
+            send_log_to_server({
+                "ip": socket.gethostbyname(socket.gethostname()),
+                "machine_name": platform.node(),
+                "machine_specs": {
+                    "os": platform.system(),
+                    "os_version": platform.version(),
+                    "machine": platform.machine(),
+                },
+                "start_time": start_time.isoformat(),
+                "end_time": datetime.now().isoformat(),
+                "file_size": None,
+                "video_length": None,
+                "processing_time": calculate_processing_time(start_time, datetime.now()),
+                "type": "youtube",
+                "status": "failure",
+                "error_logs": str(rt_err),
+            })
+        except Exception as e:
+            error_message = f"Unexpected error: {e}"
+            append_to_log(error_message)
+            progress_label.set("Download failed.")
+            send_log_to_server({
+                "ip": socket.gethostbyname(socket.gethostname()),
+                "machine_name": platform.node(),
+                "machine_specs": {
+                    "os": platform.system(),
+                    "os_version": platform.version(),
+                    "machine": platform.machine(),
+                },
+                "start_time": start_time.isoformat(),
+                "end_time": datetime.now().isoformat(),
+                "file_size": None,
+                "video_length": None,
+                "processing_time": calculate_processing_time(start_time, datetime.now()),
+                "type": "youtube",
+                "status": "failure",
+                "error_logs": str(e),
             })
 
     def init_local_processing(self):
