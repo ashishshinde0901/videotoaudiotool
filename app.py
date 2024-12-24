@@ -7,10 +7,19 @@ import socket
 import threading
 from datetime import datetime
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, ttk, Toplevel, Text
 import customtkinter as ctk
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from video_processor import process_video, get_bundled_path
+
+
+LOG_FILE = os.path.join(tempfile.gettempdir(), "rian_tool_logs.txt")
+
+
+def append_to_log(message):
+    """Append a message to the log file."""
+    with open(LOG_FILE, "a") as log_file:
+        log_file.write(message + "\n")
 
 
 def send_log_to_server(log_data):
@@ -19,13 +28,16 @@ def send_log_to_server(log_data):
         server_url = "http://127.0.0.1:5175/log"
         response = requests.post(server_url, json=log_data, timeout=10)
         response.raise_for_status()
+        append_to_log(f"Log sent to server: {log_data}")
         print("Log sent successfully to the server.")
     except requests.HTTPError as http_err:
-        print(f"HTTP error occurred: {http_err}")
-        messagebox.showerror("Server Error", f"Failed to send log to server: {http_err}")
+        error_message = f"Failed to send log to server: {http_err}"
+        append_to_log(error_message)
+        messagebox.showerror("Server Error", error_message)
     except requests.RequestException as req_err:
-        print(f"Request error occurred: {req_err}")
-        messagebox.showerror("Server Error", f"Failed to send log to server: {req_err}")
+        error_message = f"Request error occurred: {req_err}"
+        append_to_log(error_message)
+        messagebox.showerror("Server Error", error_message)
 
 
 def download_youtube_video(link, temp_dir):
@@ -48,7 +60,7 @@ def get_video_length(video_path):
         with VideoFileClip(str(video_path)) as video:
             return round(video.duration, 2)
     except Exception as e:
-        print(f"Error calculating video length: {e}")
+        append_to_log(f"Error calculating video length: {e}")
         return None
 
 
@@ -74,14 +86,12 @@ def run_in_thread(target, *args):
     threading.Thread(target=target, args=args, daemon=True).start()
 
 
-# Main Application
 class RianVideoProcessingTool(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Rian Video Processing Tool")
         self.geometry("1000x750")
         self.resizable(False, False)
-        self.configure(bg="#f5f5f5")
         ctk.set_appearance_mode("Light")
         ctk.set_default_color_theme("blue")
 
@@ -144,6 +154,13 @@ class RianVideoProcessingTool(ctk.CTk):
         progress_bar.pack(pady=10)
         ctk.CTkLabel(self.content_frame, textvariable=progress_label, font=("Helvetica", 14)).pack(pady=10)
 
+        # Add "Show Logs" Button
+        ctk.CTkButton(
+            self.content_frame,
+            text="Show Logs",
+            command=self.show_logs,
+        ).pack(pady=10)
+
     def process_local_video(self, progress_label, progress_bar):
         """Process a local video."""
         file_path = filedialog.askopenfilename(
@@ -165,50 +182,34 @@ class RianVideoProcessingTool(ctk.CTk):
 
             end_time = datetime.now()
             processing_time = calculate_processing_time(start_time, end_time)
+            log_data = {
+                "ip": socket.gethostbyname(socket.gethostname()),
+                "machine_name": platform.node(),
+                "video_length": video_length,
+                "status": "success",
+                "processing_time": processing_time,
+            }
+            send_log_to_server(log_data)
             progress_label.set(f"Video processed successfully in {processing_time:.2f} seconds.")
         except Exception as e:
-            progress_label.set(f"Processing failed: {e}")
-            messagebox.showerror("Error", f"Processing failed: {e}")
+            error_message = f"Processing failed: {e}"
+            append_to_log(error_message)
+            progress_label.set(error_message)
+            messagebox.showerror("Error", error_message)
 
-    def init_youtube_download(self):
-        """Initialize the YouTube download page."""
-        self.clear_content_frame()
-        youtube_link_var = ctk.StringVar()
-        progress_label = ctk.StringVar(value="Status: Ready")
-        progress_bar = ttk.Progressbar(self.content_frame, orient="horizontal", mode="determinate", length=600)
+    def show_logs(self):
+        """Display logs in a new window."""
+        logs_window = Toplevel(self)
+        logs_window.title("Logs")
+        logs_window.geometry("800x600")
+        logs_window.resizable(False, False)
 
-        ctk.CTkLabel(self.content_frame, text="Download YouTube Video", font=("Helvetica", 18)).pack(pady=20)
-        ctk.CTkEntry(self.content_frame, textvariable=youtube_link_var, placeholder_text="Enter YouTube link").pack(pady=20)
-        ctk.CTkButton(
-            self.content_frame,
-            text="Download",
-            command=lambda: run_in_thread(self.process_youtube_video, youtube_link_var, progress_label, progress_bar),
-        ).pack(pady=20)
-        progress_bar.pack(pady=10)
-        ctk.CTkLabel(self.content_frame, textvariable=progress_label, font=("Helvetica", 14)).pack(pady=10)
+        text_widget = Text(logs_window, wrap="word", font=("Helvetica", 12))
+        text_widget.pack(expand=True, fill="both", padx=10, pady=10)
 
-    def process_youtube_video(self, youtube_link_var, progress_label, progress_bar):
-        """Download a YouTube video."""
-        link = youtube_link_var.get().strip()
-        if not link:
-            progress_label.set("YouTube link is empty.")
-            return
-
-        progress_label.set("Downloading video... Please wait.")
-        start_time = datetime.now()
         try:
-            with tempfile.TemporaryDirectory() as temp_dir:
-                video_path = download_youtube_video(link, temp_dir)
-                save_file(video_path, "Save Downloaded Video")
-
-            end_time = datetime.now()
-            processing_time = calculate_processing_time(start_time, end_time)
-            progress_label.set(f"Video downloaded successfully in {processing_time:.2f} seconds.")
-        except Exception as e:
-            progress_label.set(f"Download failed: {e}")
-            messagebox.showerror("Error", f"Failed to download video: {e}")
-
-
-if __name__ == "__main__":
-    app = RianVideoProcessingTool()
-    app.mainloop()
+            with open(LOG_FILE, "r") as log_file:
+                logs = log_file.read()
+                text_widget.insert("1.0", logs)
+        except FileNotFoundError:
+            text_widget.insert("1.0", "No logs available.")
