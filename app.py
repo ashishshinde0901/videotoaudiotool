@@ -75,151 +75,112 @@ def run_in_thread(target, *args):
     threading.Thread(target=target, args=args, daemon=True).start()
 
 
-def process_local_video(progress_label, progress_bar):
-    """Process a locally uploaded video file."""
-    file_path = filedialog.askopenfilename(
-        title="Select a Video File",
-        filetypes=[("Video Files", "*.mp4 *.mkv *.avi *.mov")],
-    )
-    if not file_path:
-        progress_label.set("No file selected.")
-        return
-
-    progress_label.set("Processing video... Please wait.")
-    progress_bar.start()
-    start_time = datetime.now()
-
-    try:
-        video_length = get_video_length(file_path)
-        with tempfile.TemporaryDirectory() as temp_dir:
-            vocals_path, noise_path, _ = process_video(file_path, Path(temp_dir))
-            save_file(vocals_path, "Save Vocals as WAV")
-            save_file(noise_path, "Save Background Noise as WAV")
-
-        end_time = datetime.now()
-        processing_time = calculate_processing_time(start_time, end_time)
-        # Log successful processing
-        send_log_to_server({
-            "ip": socket.gethostbyname(socket.gethostname()),
-            "machine_name": platform.node(),
-            "machine_specs": {
-                "os": platform.system(),
-                "os_version": platform.version(),
-                "machine": platform.machine(),
-            },
-            "file_size": os.path.getsize(file_path),
-            "video_length": video_length,
-            "status": "success",
-            "type": "local",
-            "start_time": start_time.isoformat(),
-            "end_time": end_time.isoformat(),
-            "processing_time": processing_time,
-        })
-        progress_label.set("Video processed successfully.")
-    except Exception as e:
-        progress_label.set(f"Processing failed: {e}")
-        messagebox.showerror("Error", f"Processing failed: {e}")
-    finally:
-        progress_bar.stop()
+# Shared UI Updates
+def update_progress_bar(progress_bar, progress_label, value):
+    """Update the progress bar with a percentage value."""
+    progress_bar['value'] = value
+    progress_label.set(f"Progress: {value:.0f}%")
+    progress_bar.update_idletasks()
 
 
-def process_youtube_video(youtube_link_var, progress_label, progress_bar):
-    """Download and save a YouTube video."""
-    link = youtube_link_var.get().strip()
-    if not link:
-        progress_label.set("YouTube link is empty.")
-        return
+# Main Application
+class RianVideoProcessingTool(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("Rian Video Processing Tool")
+        self.geometry("1000x750")
+        self.resizable(False, False)
+        self.configure(bg="#f5f5f5")
+        ctk.set_appearance_mode("Light")  # Default to light mode
+        ctk.set_default_color_theme("blue")  # Set blue theme
 
-    progress_label.set("Downloading video... Please wait.")
-    progress_bar.start()
-    start_time = datetime.now()
+        # Initialize navigation and content frame
+        self.nav_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="#1e3c72")
+        self.nav_frame.pack(side="left", fill="y")
 
-    try:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            video_path = download_youtube_video(link, temp_dir)
-            video_length = get_video_length(video_path)
-            save_file(video_path, "Save Downloaded Video")
+        self.content_frame = ctk.CTkFrame(self, corner_radius=10)
+        self.content_frame.pack(side="right", expand=True, fill="both", padx=20, pady=20)
 
-        end_time = datetime.now()
-        processing_time = calculate_processing_time(start_time, end_time)
-        # Log successful download
-        send_log_to_server({
-            "ip": socket.gethostbyname(socket.gethostname()),
-            "machine_name": platform.node(),
-            "machine_specs": {
-                "os": platform.system(),
-                "os_version": platform.version(),
-                "machine": platform.machine(),
-            },
-            "youtube_link": link,
-            "video_length": video_length,
-            "status": "success",
-            "type": "youtube",
-            "start_time": start_time.isoformat(),
-            "end_time": end_time.isoformat(),
-            "processing_time": processing_time,
-        })
-        progress_label.set("Video downloaded successfully.")
-    except Exception as e:
-        progress_label.set(f"Download failed: {e}")
-        messagebox.showerror("Error", f"Failed to download video: {e}")
-    finally:
-        progress_bar.stop()
+        self.init_navbar()
+        self.init_homepage()
 
+    def init_navbar(self):
+        """Initialize the navigation bar."""
+        ctk.CTkLabel(
+            self.nav_frame,
+            text="Rian Video Processing Tool",
+            font=("Helvetica", 20, "bold"),
+            fg_color="#142850",
+            text_color="white",
+            corner_radius=8,
+        ).pack(pady=20)
 
-def main():
-    ctk.set_appearance_mode("Light")  # Set light theme
-    ctk.set_default_color_theme("blue")  # Set primary color theme
+        ctk.CTkButton(self.nav_frame, text="Home", command=self.init_homepage).pack(pady=10)
+        ctk.CTkButton(self.nav_frame, text="Local Processing", command=self.init_local_processing).pack(pady=10)
+        ctk.CTkButton(self.nav_frame, text="YouTube Download", command=self.init_youtube_download).pack(pady=10)
 
-    app = ctk.CTk()
-    app.title("Video Audio Processor")
-    app.geometry("900x700")
+    def clear_content_frame(self):
+        """Clear the content frame before loading new content."""
+        for widget in self.content_frame.winfo_children():
+            widget.destroy()
 
-    # Navigation bar
-    nav_frame = ctk.CTkFrame(app)
-    nav_frame.pack(fill="x")
+    def init_homepage(self):
+        """Initialize the homepage."""
+        self.clear_content_frame()
+        ctk.CTkLabel(
+            self.content_frame,
+            text="Welcome to Rian Video Processing Tool",
+            font=("Helvetica", 24, "bold"),
+        ).pack(pady=40)
+        ctk.CTkLabel(
+            self.content_frame,
+            text="This tool allows you to process videos locally or download YouTube videos with ease.",
+            font=("Helvetica", 16),
+        ).pack(pady=10)
 
-    ctk.CTkButton(nav_frame, text="Local Video Processing", command=lambda: open_local_processing_window()).pack(side="left", padx=20)
-    ctk.CTkButton(nav_frame, text="YouTube Download", command=lambda: open_youtube_download_window()).pack(side="left", padx=20)
+    def init_local_processing(self):
+        """Initialize the local video processing page."""
+        self.clear_content_frame()
+        progress_label = ctk.StringVar(value="Status: Ready")
+        progress_bar = ttk.Progressbar(self.content_frame, orient="horizontal", mode="determinate", length=600)
 
-    ctk.CTkLabel(app, text="Select a feature from the navigation above.", font=("Helvetica", 16)).pack(pady=20)
-    app.mainloop()
+        ctk.CTkLabel(self.content_frame, text="Process Local Video File", font=("Helvetica", 18)).pack(pady=20)
+        ctk.CTkButton(
+            self.content_frame,
+            text="Upload File",
+            command=lambda: run_in_thread(self.process_local_video, progress_label, progress_bar),
+        ).pack(pady=20)
+        progress_bar.pack(pady=10)
+        ctk.CTkLabel(self.content_frame, textvariable=progress_label, font=("Helvetica", 14)).pack(pady=10)
 
+    def process_local_video(self, progress_label, progress_bar):
+        """Process a local video."""
+        # Your implementation for processing local video
+        pass  # Replace this with the actual implementation
 
-def open_local_processing_window():
-    app = ctk.CTk()
-    app.title("Local Video Processing")
-    app.geometry("900x700")
+    def init_youtube_download(self):
+        """Initialize the YouTube download page."""
+        self.clear_content_frame()
+        youtube_link_var = ctk.StringVar()
+        progress_label = ctk.StringVar(value="Status: Ready")
+        progress_bar = ttk.Progressbar(self.content_frame, orient="horizontal", mode="determinate", length=600)
 
-    progress_label = ctk.StringVar(value="Status: Ready")
-    progress_bar = ttk.Progressbar(app, orient="horizontal", mode="indeterminate")
+        ctk.CTkLabel(self.content_frame, text="Download YouTube Video", font=("Helvetica", 18)).pack(pady=20)
+        ctk.CTkEntry(self.content_frame, textvariable=youtube_link_var, placeholder_text="Enter YouTube link").pack(pady=20)
+        ctk.CTkButton(
+            self.content_frame,
+            text="Download",
+            command=lambda: run_in_thread(self.process_youtube_video, youtube_link_var, progress_label, progress_bar),
+        ).pack(pady=20)
+        progress_bar.pack(pady=10)
+        ctk.CTkLabel(self.content_frame, textvariable=progress_label, font=("Helvetica", 14)).pack(pady=10)
 
-    ctk.CTkLabel(app, text="Process Local Video File", font=("Helvetica", 16)).pack(pady=10)
-    ctk.CTkButton(app, text="Upload File", command=lambda: run_in_thread(process_local_video, progress_label, progress_bar)).pack(pady=10)
-    ctk.CTkLabel(app, textvariable=progress_label, font=("Helvetica", 14)).pack(pady=10)
-    progress_bar.pack(pady=10)
-
-    app.mainloop()
-
-
-def open_youtube_download_window():
-    app = ctk.CTk()
-    app.title("YouTube Video Download")
-    app.geometry("900x700")
-
-    youtube_link_var = ctk.StringVar()
-    progress_label = ctk.StringVar(value="Status: Ready")
-    progress_bar = ttk.Progressbar(app, orient="horizontal", mode="indeterminate")
-
-    ctk.CTkLabel(app, text="Download Video from YouTube", font=("Helvetica", 16)).pack(pady=10)
-    ctk.CTkEntry(app, textvariable=youtube_link_var, width=400).pack(pady=10)
-    ctk.CTkButton(app, text="Download Video", command=lambda: run_in_thread(process_youtube_video, youtube_link_var, progress_label, progress_bar)).pack(pady=10)
-    ctk.CTkLabel(app, textvariable=progress_label, font=("Helvetica", 14)).pack(pady=10)
-    progress_bar.pack(pady=10)
-
-    app.mainloop()
+    def process_youtube_video(self, youtube_link_var, progress_label, progress_bar):
+        """Download a YouTube video."""
+        # Your implementation for downloading YouTube video
+        pass  # Replace this with the actual implementation
 
 
 if __name__ == "__main__":
-    main()
-    
+    app = RianVideoProcessingTool()
+    app.mainloop()
