@@ -1,6 +1,7 @@
 import os
 import tempfile
 import sys
+import subprocess
 import requests
 import platform
 import socket
@@ -20,9 +21,7 @@ def send_log_to_server(log_data):
         response.raise_for_status()
         print("Log sent successfully to the server.")
     except requests.HTTPError as http_err:
-        print(f"HTTP error occurred: {http_err}")  # Detailed HTTP error
-        response_content = response.content.decode() if response else "No response content"
-        print(f"Server response: {response_content}")
+        print(f"HTTP error occurred: {http_err}")
         messagebox.showerror("Server Error", f"Failed to send log to server: {http_err}")
     except requests.RequestException as req_err:
         print(f"Request error occurred: {req_err}")
@@ -57,8 +56,8 @@ def save_file(file_path, title):
     """Prompt the user to save a file."""
     save_path = filedialog.asksaveasfilename(
         title=title,
-        defaultextension=".wav" if file_path.suffix == ".wav" else ".mp4",
-        filetypes=[("Audio Files", "*.wav"), ("MP4 Files", "*.mp4"), ("All Files", "*.*")],
+        defaultextension=file_path.suffix,
+        filetypes=[("MP4 Files", "*.mp4"), ("WAV Files", "*.wav"), ("All Files", "*.*")],
     )
     if save_path:
         os.rename(file_path, save_path)
@@ -92,6 +91,7 @@ def main():
             return
 
         update_status("Processing video... Please wait.")
+        start_time = datetime.now()
         try:
             video_length = get_video_length(file_path)
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -99,6 +99,7 @@ def main():
                 save_file(vocals_path, "Save Vocals")
                 save_file(noise_path, "Save Background Noise")
 
+            end_time = datetime.now()
             # Log successful processing
             send_log_to_server({
                 "ip": socket.gethostbyname(socket.gethostname()),
@@ -112,6 +113,8 @@ def main():
                 "video_length": video_length,
                 "status": "success",
                 "type": "local",
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat(),
             })
             update_status("Video processed successfully.", "#28a745")
         except Exception as e:
@@ -126,12 +129,14 @@ def main():
             return
 
         update_status("Downloading video... Please wait.")
+        start_time = datetime.now()
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
                 video_path = download_youtube_video(link, temp_dir)
                 video_length = get_video_length(video_path)
                 save_file(video_path, "Save Downloaded Video")
 
+            end_time = datetime.now()
             # Log successful download
             send_log_to_server({
                 "ip": socket.gethostbyname(socket.gethostname()),
@@ -145,6 +150,8 @@ def main():
                 "video_length": video_length,
                 "status": "success",
                 "type": "youtube",
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat(),
             })
             update_status("Video downloaded successfully.", "#28a745")
         except Exception as e:
