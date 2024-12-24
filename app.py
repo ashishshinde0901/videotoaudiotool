@@ -1,6 +1,5 @@
 import os
 import tempfile
-import sys
 import subprocess
 import requests
 import platform
@@ -17,7 +16,7 @@ from video_processor import process_video, get_bundled_path
 def send_log_to_server(log_data):
     """Send log data to the server."""
     try:
-        server_url = "http://127.0.0.1:5175/log"  # The server endpoint
+        server_url = "http://127.0.0.1:5175/log"
         response = requests.post(server_url, json=log_data, timeout=10)
         response.raise_for_status()
         print("Log sent successfully to the server.")
@@ -75,14 +74,6 @@ def run_in_thread(target, *args):
     threading.Thread(target=target, args=args, daemon=True).start()
 
 
-# Shared UI Updates
-def update_progress_bar(progress_bar, progress_label, value):
-    """Update the progress bar with a percentage value."""
-    progress_bar['value'] = value
-    progress_label.set(f"Progress: {value:.0f}%")
-    progress_bar.update_idletasks()
-
-
 # Main Application
 class RianVideoProcessingTool(ctk.CTk):
     def __init__(self):
@@ -91,8 +82,8 @@ class RianVideoProcessingTool(ctk.CTk):
         self.geometry("1000x750")
         self.resizable(False, False)
         self.configure(bg="#f5f5f5")
-        ctk.set_appearance_mode("Light")  # Default to light mode
-        ctk.set_default_color_theme("blue")  # Set blue theme
+        ctk.set_appearance_mode("Light")
+        ctk.set_default_color_theme("blue")
 
         # Initialize navigation and content frame
         self.nav_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="#1e3c72")
@@ -155,8 +146,29 @@ class RianVideoProcessingTool(ctk.CTk):
 
     def process_local_video(self, progress_label, progress_bar):
         """Process a local video."""
-        # Your implementation for processing local video
-        pass  # Replace this with the actual implementation
+        file_path = filedialog.askopenfilename(
+            title="Select a Video File",
+            filetypes=[("Video Files", "*.mp4 *.mkv *.avi *.mov")],
+        )
+        if not file_path:
+            progress_label.set("No file selected.")
+            return
+
+        progress_label.set("Processing video... Please wait.")
+        start_time = datetime.now()
+        try:
+            video_length = get_video_length(file_path)
+            with tempfile.TemporaryDirectory() as temp_dir:
+                vocals_path, noise_path, _ = process_video(file_path, Path(temp_dir))
+                save_file(vocals_path, "Save Vocals as WAV")
+                save_file(noise_path, "Save Background Noise as WAV")
+
+            end_time = datetime.now()
+            processing_time = calculate_processing_time(start_time, end_time)
+            progress_label.set(f"Video processed successfully in {processing_time:.2f} seconds.")
+        except Exception as e:
+            progress_label.set(f"Processing failed: {e}")
+            messagebox.showerror("Error", f"Processing failed: {e}")
 
     def init_youtube_download(self):
         """Initialize the YouTube download page."""
@@ -177,8 +189,24 @@ class RianVideoProcessingTool(ctk.CTk):
 
     def process_youtube_video(self, youtube_link_var, progress_label, progress_bar):
         """Download a YouTube video."""
-        # Your implementation for downloading YouTube video
-        pass  # Replace this with the actual implementation
+        link = youtube_link_var.get().strip()
+        if not link:
+            progress_label.set("YouTube link is empty.")
+            return
+
+        progress_label.set("Downloading video... Please wait.")
+        start_time = datetime.now()
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                video_path = download_youtube_video(link, temp_dir)
+                save_file(video_path, "Save Downloaded Video")
+
+            end_time = datetime.now()
+            processing_time = calculate_processing_time(start_time, end_time)
+            progress_label.set(f"Video downloaded successfully in {processing_time:.2f} seconds.")
+        except Exception as e:
+            progress_label.set(f"Download failed: {e}")
+            messagebox.showerror("Error", f"Failed to download video: {e}")
 
 
 if __name__ == "__main__":
