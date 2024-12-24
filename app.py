@@ -79,18 +79,40 @@ def main():
             start_processing(file_path, upload_type="local", video_length=video_length)
 
     def process_youtube_video():
+        """Download and store a video from a YouTube link with user-specified name and location."""
         link = youtube_link.get().strip()
         if not link:
             messagebox.showerror("Error", "Please enter a YouTube link.")
             return
 
         try:
+            # Prompt user to choose a filename and location
+            save_path = filedialog.asksaveasfilename(
+                title="Save YouTube Video As",
+                defaultextension=".mp4",
+                filetypes=[("MP4 Files", "*.mp4"), ("All Files", "*.*")],
+            )
+            if not save_path:
+                messagebox.showinfo("Cancelled", "Download cancelled by user.")
+                return
+
+            status_label.config(text="Downloading video... Please wait.", fg="#007bff")
+            root.update_idletasks()
+
+            # Create a temporary directory for downloading the video
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_file_path = download_youtube_video(link, temp_dir)
-                video_length = get_video_length(temp_file_path)
-                messagebox.showinfo("Success", f"Video downloaded successfully! Length: {video_length} seconds")
-                send_log_to_server({
-                    "ip": socket.gethostbyname(socket.gethostname()),
+
+                # Move the downloaded file to the chosen location
+                os.rename(temp_file_path, save_path)
+                video_length = get_video_length(save_path)
+
+                status_label.config(text="Video downloaded successfully.", fg="green")
+                root.update_idletasks()
+
+                # Send logs for the download event
+                log_data = {
+                    "ip": socket.gethostbyname(socket.gethostname()),  # Local IP
                     "machine_name": socket.gethostname(),
                     "machine_specs": {
                         "os": platform.system(),
@@ -99,13 +121,18 @@ def main():
                     },
                     "start_time": datetime.now().isoformat(),
                     "end_time": datetime.now().isoformat(),
-                    "file_size": os.path.getsize(temp_file_path),
+                    "file_size": os.path.getsize(save_path),
                     "video_length": video_length,
                     "upload_type": "youtube",
                     "status": "success",
                     "error_logs": None,
-                })
+                }
+                send_log_to_server(log_data)
+
+                messagebox.showinfo("Success", f"Video downloaded successfully!\nSaved as: {save_path}")
+
         except Exception as e:
+            status_label.config(text="Download Failed", fg="red")
             messagebox.showerror("Error", f"Failed to download YouTube video: {e}")
 
     def start_processing(file_path, upload_type, video_length):
