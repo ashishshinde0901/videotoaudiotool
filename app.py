@@ -7,7 +7,8 @@ import platform
 import socket
 from datetime import datetime
 from pathlib import Path
-from tkinter import filedialog, messagebox, Tk, Label, Button, Frame, StringVar, Entry
+from tkinter import filedialog, messagebox
+import customtkinter as ctk
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from video_processor import process_video, get_bundled_path
 
@@ -16,15 +17,12 @@ def send_log_to_server(log_data):
     """Send log data to the server."""
     try:
         server_url = "http://127.0.0.1:5175/log"  # The server endpoint
-        print(f"Sending log data: {log_data}")  # Debugging output for logs
         response = requests.post(server_url, json=log_data, timeout=10)
         response.raise_for_status()
         print("Log sent successfully to the server.")
     except requests.HTTPError as http_err:
-        print(f"HTTP error occurred: {http_err}")
         messagebox.showerror("Server Error", f"Failed to send log to server: {http_err}")
     except requests.RequestException as req_err:
-        print(f"Request error occurred: {req_err}")
         messagebox.showerror("Server Error", f"Failed to send log to server: {req_err}")
 
 
@@ -64,21 +62,28 @@ def save_file(file_path, title):
         messagebox.showinfo("File Saved", f"Saved as: {save_path}")
 
 
-def main():
-    root = Tk()
-    root.title("Video Audio Processor")
-    root.geometry("900x700")
-    root.resizable(False, False)
-    root.configure(bg="#f8f9fa")
+def calculate_processing_time(start_time, end_time):
+    """Calculate processing time in seconds."""
+    return (end_time - start_time).total_seconds()
 
-    youtube_link = StringVar(value="")
-    status_label = StringVar(value="Status: Ready")
+
+def main():
+    ctk.set_appearance_mode("Dark")  # Set dark theme
+    ctk.set_default_color_theme("blue")  # Set primary color theme
+
+    app = ctk.CTk()
+    app.title("Video Audio Processor")
+    app.geometry("900x700")
+    app.resizable(False, False)
+
+    youtube_link = ctk.StringVar(value="")
+    status_label = ctk.StringVar(value="Status: Ready")
 
     def update_status(message, color="#007bff"):
         """Update the status label."""
         status_label.set(message)
-        status_lbl.config(fg=color)
-        root.update_idletasks()
+        status_lbl.configure(fg_color=color)
+        app.update_idletasks()
 
     def process_local_video():
         """Process a locally uploaded video file."""
@@ -96,10 +101,11 @@ def main():
             video_length = get_video_length(file_path)
             with tempfile.TemporaryDirectory() as temp_dir:
                 vocals_path, noise_path, _ = process_video(file_path, Path(temp_dir))
-                save_file(vocals_path, "Save Vocals")
-                save_file(noise_path, "Save Background Noise")
+                save_file(vocals_path, "Save Vocals as WAV")
+                save_file(noise_path, "Save Background Noise as WAV")
 
             end_time = datetime.now()
+            processing_time = calculate_processing_time(start_time, end_time)
             # Log successful processing
             send_log_to_server({
                 "ip": socket.gethostbyname(socket.gethostname()),
@@ -115,6 +121,7 @@ def main():
                 "type": "local",
                 "start_time": start_time.isoformat(),
                 "end_time": end_time.isoformat(),
+                "processing_time": processing_time,
             })
             update_status("Video processed successfully.", "#28a745")
         except Exception as e:
@@ -137,6 +144,7 @@ def main():
                 save_file(video_path, "Save Downloaded Video")
 
             end_time = datetime.now()
+            processing_time = calculate_processing_time(start_time, end_time)
             # Log successful download
             send_log_to_server({
                 "ip": socket.gethostbyname(socket.gethostname()),
@@ -152,6 +160,7 @@ def main():
                 "type": "youtube",
                 "start_time": start_time.isoformat(),
                 "end_time": end_time.isoformat(),
+                "processing_time": processing_time,
             })
             update_status("Video downloaded successfully.", "#28a745")
         except Exception as e:
@@ -159,31 +168,31 @@ def main():
             messagebox.showerror("Error", f"Failed to download video: {e}")
 
     # UI Components
-    Label(root, text="Video Audio Processor", font=("Helvetica", 20, "bold"), bg="#f8f9fa", fg="#212529").pack(pady=15)
+    ctk.CTkLabel(app, text="Video Audio Processor", font=("Helvetica", 28)).pack(pady=20)
 
     # Local Video Processing Section
-    local_frame = Frame(root, bg="#ffffff", highlightbackground="#007bff", highlightthickness=2)
+    local_frame = ctk.CTkFrame(app)
     local_frame.pack(pady=20, padx=20, fill="x")
-    Label(local_frame, text="Process Local Video File", font=("Helvetica", 14, "bold"), bg="#ffffff").pack(pady=10)
-    Label(local_frame, text="Upload a video to extract vocals and background noise.", bg="#ffffff", fg="#6c757d").pack(pady=5)
-    Button(local_frame, text="Upload File", command=process_local_video, bg="#007bff", fg="#ffffff", font=("Helvetica", 12)).pack(pady=10)
+    ctk.CTkLabel(local_frame, text="Process Local Video File", font=("Helvetica", 16)).pack(pady=10)
+    ctk.CTkLabel(local_frame, text="Upload a video to extract vocals and background noise.").pack(pady=5)
+    ctk.CTkButton(local_frame, text="Upload File", command=process_local_video).pack(pady=10)
 
     # YouTube Video Download Section
-    youtube_frame = Frame(root, bg="#ffffff", highlightbackground="#007bff", highlightthickness=2)
+    youtube_frame = ctk.CTkFrame(app)
     youtube_frame.pack(pady=20, padx=20, fill="x")
-    Label(youtube_frame, text="Download Video from YouTube", font=("Helvetica", 14, "bold"), bg="#ffffff").pack(pady=10)
-    Label(youtube_frame, text="Enter the YouTube link to download the video.", bg="#ffffff", fg="#6c757d").pack(pady=5)
-    Entry(youtube_frame, textvariable=youtube_link, font=("Helvetica", 12), width=50).pack(pady=10)
-    Button(youtube_frame, text="Download Video", command=process_youtube_video, bg="#007bff", fg="#ffffff", font=("Helvetica", 12)).pack(pady=10)
+    ctk.CTkLabel(youtube_frame, text="Download Video from YouTube", font=("Helvetica", 16)).pack(pady=10)
+    ctk.CTkLabel(youtube_frame, text="Enter the YouTube link to download the video.").pack(pady=5)
+    ctk.CTkEntry(youtube_frame, textvariable=youtube_link, width=400).pack(pady=10)
+    ctk.CTkButton(youtube_frame, text="Download Video", command=process_youtube_video).pack(pady=10)
 
     # Status Label
-    status_lbl = Label(root, textvariable=status_label, bg="#f8f9fa", fg="#007bff", font=("Helvetica", 12, "italic"))
+    status_lbl = ctk.CTkLabel(app, textvariable=status_label, font=("Helvetica", 14))
     status_lbl.pack(pady=20)
 
     # Exit Button
-    Button(root, text="Exit", command=root.quit, bg="#dc3545", fg="#ffffff", font=("Helvetica", 12)).pack(pady=10)
+    ctk.CTkButton(app, text="Exit", command=app.quit, fg_color="red").pack(pady=10)
 
-    root.mainloop()
+    app.mainloop()
 
 
 if __name__ == "__main__":
