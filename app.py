@@ -2,11 +2,14 @@ import os
 import stat
 import tempfile
 import sys
+import requests
+import platform
+import socket
+from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, Tk, Label, Button, Frame, StringVar, Toplevel, Text, Scrollbar, RIGHT, Y, END
-
-# Import from our local video_processor.py
 from video_processor import process_video
+
 
 def fix_permissions_in_meipass():
     """
@@ -18,8 +21,20 @@ def fix_permissions_in_meipass():
         for binary in bin_dir.iterdir():
             binary.chmod(binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
+
+def send_log_to_server(log_data):
+    """Send the JSON log data to the server."""
+    try:
+        server_url = "http://127.0.0.1:5175/log"  # Change to your server's IP/URL
+        response = requests.post(server_url, json=log_data, timeout=10)
+        response.raise_for_status()
+        print("Log sent successfully to the server.")
+    except requests.RequestException as e:
+        print(f"Failed to send log to server: {e}")
+        messagebox.showerror("Server Error", f"Failed to send log to server: {e}")
+
+
 def main():
-    """Main application logic."""
     fix_permissions_in_meipass()
 
     root = Tk()
@@ -43,6 +58,7 @@ def main():
 
     def start_processing(file_path):
         """Start video processing."""
+        start_time = datetime.now()
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_dir_path = Path(temp_dir)
             try:
@@ -52,6 +68,28 @@ def main():
                 # Call the processing function
                 vocals_path, noise_path, logs = process_video(file_path, temp_dir_path)
                 demucs_logs[0], demucs_logs[1] = logs  # Store logs for viewing later
+
+                # Success
+                end_time = datetime.now()
+                processing_time = (end_time - start_time).total_seconds()
+
+                log_data = {
+                    "ip": socket.gethostbyname(socket.gethostname()),  # Local IP
+                    "machine_name": socket.gethostname(),
+                    "machine_specs": {
+                        "os": platform.system(),
+                        "os_version": platform.version(),
+                        "machine": platform.machine(),
+                    },
+                    "start_time": start_time.isoformat(),
+                    "end_time": end_time.isoformat(),
+                    "file_size": os.path.getsize(file_path),
+                    "video_length": None,  # Optionally extract with FFmpeg
+                    "processing_time": processing_time,
+                    "status": "success",
+                    "error_logs": None,
+                }
+                send_log_to_server(log_data)
 
                 status_label.config(text="Processing Complete!", fg="green")
                 messagebox.showinfo("Success", "Audio separation completed!")
@@ -63,16 +101,31 @@ def main():
                 # Enable "View Logs" button now that we have logs
                 view_logs_button.config(state="normal")
 
-            except FileNotFoundError as e:
-                status_label.config(text="Processing Failed", fg="red")
-                messagebox.showerror("File Not Found", str(e))
-            except RuntimeError as e:
-                status_label.config(text="Processing Failed", fg="red")
-                messagebox.showerror("Error", str(e))
             except Exception as e:
-                # Catch any unexpected error
+                # Failure
+                end_time = datetime.now()
+                processing_time = (end_time - start_time).total_seconds()
+
+                log_data = {
+                    "ip": socket.gethostbyname(socket.gethostname()),  # Local IP
+                    "machine_name": socket.gethostname(),
+                    "machine_specs": {
+                        "os": platform.system(),
+                        "os_version": platform.version(),
+                        "machine": platform.machine(),
+                    },
+                    "start_time": start_time.isoformat(),
+                    "end_time": end_time.isoformat(),
+                    "file_size": os.path.getsize(file_path) if os.path.exists(file_path) else None,
+                    "video_length": None,  # Optionally extract with FFmpeg
+                    "processing_time": processing_time,
+                    "status": "failure",
+                    "error_logs": str(e),
+                }
+                send_log_to_server(log_data)
+
                 status_label.config(text="Processing Failed", fg="red")
-                messagebox.showerror("Unexpected Error", str(e))
+                messagebox.showerror("Error", f"Processing failed: {e}")
             finally:
                 status_label.config(text="Ready.")
 
@@ -185,6 +238,7 @@ def main():
     ).pack(pady=10)
 
     root.mainloop()
+
 
 if __name__ == "__main__":
     main()
