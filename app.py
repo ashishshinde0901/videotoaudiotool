@@ -2,12 +2,13 @@ import os
 import stat
 import tempfile
 import sys
+import subprocess
 import requests
 import platform
 import socket
 from datetime import datetime
 from pathlib import Path
-from tkinter import filedialog, messagebox, Tk, Label, Button, Frame, StringVar, Toplevel, Text, Scrollbar, RIGHT, Y, END
+from tkinter import filedialog, messagebox, Tk, Label, Button, Frame, StringVar, Entry, Toplevel, Text, Scrollbar, RIGHT, Y, END
 from video_processor import process_video
 
 
@@ -34,16 +35,35 @@ def send_log_to_server(log_data):
         messagebox.showerror("Server Error", f"Failed to send log to server: {e}")
 
 
+def download_youtube_video(link, output_dir):
+    """
+    Use yt-dlp to download a video from a YouTube link.
+    """
+    try:
+        output_path = Path(output_dir) / "youtube_video.mp4"
+        command = [
+            "yt-dlp",
+            "-f", "best[ext=mp4]",  # Download the best MP4 quality
+            "-o", str(output_path),  # Specify output file path
+            link,
+        ]
+        subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return output_path
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"yt-dlp failed: {e.stderr.decode(errors='ignore')}")
+
+
 def main():
     fix_permissions_in_meipass()
 
     root = Tk()
     root.title("Video Audio Processor")
-    root.geometry("600x440")
+    root.geometry("700x500")
     root.resizable(False, False)
     root.configure(bg="#f4f4f9")
 
     selected_file_path = StringVar(value="No file selected")
+    youtube_link = StringVar(value="")
     demucs_logs = ["", ""]  # [stdout, stderr] placeholders
 
     def select_file():
@@ -54,9 +74,32 @@ def main():
         )
         if file_path:
             selected_file_path.set(file_path)
-            start_processing(file_path)
+            start_processing(file_path, upload_type="local")
 
-    def start_processing(file_path):
+    def process_youtube_video():
+        """Download and process a video from a YouTube link."""
+        link = youtube_link.get().strip()
+        if not link:
+            messagebox.showerror("Error", "Please enter a YouTube link.")
+            return
+
+        try:
+            # Step 1: Download YouTube video
+            status_label.config(text="Downloading video... Please wait.", fg="#007bff")
+            root.update_idletasks()
+
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_file_path = download_youtube_video(link, temp_dir)
+                status_label.config(text="Video downloaded. Processing...", fg="#007bff")
+                root.update_idletasks()
+
+                # Step 2: Process the downloaded video
+                start_processing(temp_file_path, upload_type="youtube")
+        except Exception as e:
+            status_label.config(text="Processing Failed", fg="red")
+            messagebox.showerror("Error", f"Failed to process YouTube video: {e}")
+
+    def start_processing(file_path, upload_type):
         """Start video processing."""
         start_time = datetime.now()
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -86,6 +129,7 @@ def main():
                     "file_size": os.path.getsize(file_path),
                     "video_length": None,  # Optionally extract with FFmpeg
                     "processing_time": processing_time,
+                    "upload_type": upload_type,  # New: YouTube or Local
                     "status": "success",
                     "error_logs": None,
                 }
@@ -97,9 +141,6 @@ def main():
                 # Prompt user to save files
                 save_file(vocals_path, "Save Clean Audio (Vocals)")
                 save_file(noise_path, "Save Background Noise")
-
-                # Enable "View Logs" button now that we have logs
-                view_logs_button.config(state="normal")
 
             except Exception as e:
                 # Failure
@@ -119,6 +160,7 @@ def main():
                     "file_size": os.path.getsize(file_path) if os.path.exists(file_path) else None,
                     "video_length": None,  # Optionally extract with FFmpeg
                     "processing_time": processing_time,
+                    "upload_type": upload_type,  # New: YouTube or Local
                     "status": "failure",
                     "error_logs": str(e),
                 }
@@ -146,33 +188,6 @@ def main():
                 messagebox.showinfo("Download Complete", f"File saved to: {save_path}")
             except Exception as e:
                 messagebox.showerror("Save Error", f"Failed to save file: {e}")
-
-    def show_logs_window():
-        """
-        Opens a new window to display the captured Demucs logs 
-        (stdout and stderr) in a scrollable Text widget.
-        """
-        log_window = Toplevel(root)
-        log_window.title("Demucs Logs")
-        log_window.geometry("600x300")
-
-        # Create a scrollable text widget
-        text_area = Text(log_window, wrap="word")
-        scrollbar = Scrollbar(log_window, command=text_area.yview)
-        text_area.configure(yscrollcommand=scrollbar.set)
-
-        # Place the text widget and scrollbar
-        text_area.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side=RIGHT, fill=Y)
-
-        # Insert the logs into the text widget
-        stdout_text = demucs_logs[0]
-        stderr_text = demucs_logs[1]
-        combined_logs = f"=== DEMUCS STDOUT ===\n{stdout_text}\n\n=== DEMUCS STDERR ===\n{stderr_text}\n"
-        text_area.insert(END, combined_logs)
-
-        # Make read-only
-        text_area.config(state="disabled")
 
     # UI Components
     Label(
@@ -205,27 +220,26 @@ def main():
 
     Label(
         root,
-        textvariable=selected_file_path,
+        text="Or Enter YouTube Link Below:",
         bg="#f4f4f9",
         fg="gray",
         font=("Helvetica", 12),
-    ).pack()
+    ).pack(pady=5)
+
+    Entry(root, textvariable=youtube_link, font=("Helvetica", 12), width=50).pack(pady=5)
+
+    Button(
+        root,
+        text="Process YouTube Video",
+        command=process_youtube_video,
+        bg="#007bff",
+        fg="white",
+        font=("Helvetica", 12),
+        width=20,
+    ).pack(pady=10)
 
     status_label = Label(root, text="Ready.", bg="#f4f4f9", fg="black", font=("Helvetica", 12))
     status_label.pack(pady=10)
-
-    # Button to open log window, initially disabled
-    view_logs_button = Button(
-        root,
-        text="View Logs",
-        command=show_logs_window,
-        bg="#6c757d",
-        fg="white",
-        font=("Helvetica", 12),
-        width=10,
-        state="disabled"
-    )
-    view_logs_button.pack(pady=5)
 
     Button(
         root,
