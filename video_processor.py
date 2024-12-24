@@ -9,7 +9,7 @@ import contextlib
 
 def get_bundled_path(executable_name):
     """
-    Returns the full path to a bundled executable (e.g., ffmpeg).
+    Returns the full path to a bundled executable (e.g., ffmpeg, yt-dlp).
     Falls back to checking PATH for unbundled execution.
     """
     try:

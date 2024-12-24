@@ -40,9 +40,10 @@ def download_youtube_video(link, output_dir):
     Use yt-dlp to download a video from a YouTube link.
     """
     try:
+        yt_dlp_path = get_bundled_path("yt-dlp.exe")  # Locate yt-dlp
         output_path = Path(output_dir) / "youtube_video.mp4"
         command = [
-            "yt-dlp",
+            yt_dlp_path,
             "-f", "best[ext=mp4]",  # Download the best MP4 quality
             "-o", str(output_path),  # Specify output file path
             link,
