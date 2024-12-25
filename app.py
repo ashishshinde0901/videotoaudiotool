@@ -37,7 +37,7 @@ def format_duration(seconds):
 def send_log_to_server(log_data):
     """Send log data to the server."""
     try:
-        server_url = "http://127.0.0.1:5175/log"
+        server_url = "https://qhowe1w8xd.execute-api.us-east-2.amazonaws.com/Prod/log"
         append_to_log(f"Preparing to send log to server: {log_data}")
         response = requests.post(server_url, json=log_data, timeout=10)
         response.raise_for_status()
