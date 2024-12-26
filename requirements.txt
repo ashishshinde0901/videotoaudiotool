@@ -1,3 +1,6 @@
-ffmpeg-python
 demucs
 tkinter
+diffq
+pysoundfile
+moviepy
+customtkinter
