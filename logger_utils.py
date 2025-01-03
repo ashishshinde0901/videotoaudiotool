@@ -5,6 +5,8 @@ import requests
 import json
 from datetime import datetime, timezone
 
+from project.license_utils import get_stored_license_data
+
 # Global variables
 CONFIG_FILE = "config.json"
 LOG_FILE = os.path.join(tempfile.gettempdir(), "rian_tool_logs.txt")
@@ -42,7 +44,7 @@ def load_config():
         append_to_log(f"Error loading configuration: {e}")
         raise
 
-# load_config()
+
 
 def initialize_log_file():
     """
@@ -80,9 +82,13 @@ def send_log_to_server(log_data):
         if not server_url:
             raise ValueError("Server URL is not configured.")
 
+        # Retrieve the license key from stored data if not provided in log_data
+        stored_license_data = get_stored_license_data()
+        license_key = log_data.get("license_key") or (stored_license_data.get("license_key") if stored_license_data else "unknown")
+
         # Format logs as per server requirements
         formatted_log = {
-            "lk": log_data.get("license_key", "string"),
+            "lk": license_key,
             "logs": [
                 {
                     "fnm": log_data.get("function_type", "string"),
@@ -115,7 +121,7 @@ def send_log_to_server(log_data):
         append_to_log(f"Error sending log to server: {e}")
     except Exception as e:
         append_to_log(f"Unexpected error during server logging: {e}")
-
+        
 # Example Debugging Usage
 if __name__ == "__main__":
     try:
