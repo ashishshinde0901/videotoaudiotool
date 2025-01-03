@@ -42,6 +42,8 @@ def load_config():
         append_to_log(f"Error loading configuration: {e}")
         raise
 
+# load_config()
+
 def initialize_log_file():
     """
     Initialize the log file if it doesn't exist.
