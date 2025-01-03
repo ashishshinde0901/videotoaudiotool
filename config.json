@@ -1,0 +1,20 @@
+{
+    "development": {
+      "server_url": "http://127.0.0.1:5175/log",
+      "license_activate_url": "http://127.0.0.1:5175/activate",
+      "license_validate_url": "http://127.0.0.1:5175/validate",
+      "promotions_url": "http://127.0.0.1:5175/promotions"
+    },
+    "production": {
+      "server_url": "https://your-production.com/log",
+      "license_activate_url": "https://your-production.com/activate",
+      "license_validate_url": "https://your-production.com/validate",
+      "promotions_url": "https://your-production.com/promotions"
+    },
+    "test": {
+      "server_url": "https://testapi.rian.io/v1/VOXTools/AddLog",
+      "license_activate_url": "https://testapi.rian.io/v1/VOXTools/ActivateLicense",
+      "license_validate_url": "https://testapi.rian.io/v1/VOXTools/ValidateLicense",
+      "promotions_url": "https://testapi.rian.io/v1/VOXTools/GetPromotion"
+    }
+  }

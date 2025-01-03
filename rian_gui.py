@@ -4,7 +4,6 @@ import platform
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, ttk
-
 import customtkinter as ctk
 
 # Import your logger utils
@@ -23,6 +22,8 @@ from utils import (
 )
 import youtube_logic
 import local_processing_logic
+from license_utils import ensure_valid_license
+from promotions_utils import fetch_promotions  # Import promotions utility
 
 ###############################################################################
 #                      MAIN GUI APPLICATION CLASS
@@ -42,6 +43,9 @@ class RianVideoProcessingTool(ctk.CTk):
         ctk.set_appearance_mode("Light")
         ctk.set_default_color_theme("blue")
 
+        # First, ensure valid license before anything else
+        ensure_valid_license(self)
+
         # Initialize local log file
         initialize_log_file()
 
@@ -51,6 +55,9 @@ class RianVideoProcessingTool(ctk.CTk):
 
         self.content_frame = ctk.CTkFrame(self, corner_radius=10)
         self.content_frame.pack(side="right", expand=True, fill="both", padx=20, pady=20)
+
+        self.promotions = []  # Store fetched promotions
+        self.client_id = socket.gethostname()  # Use client ID from license validation or default
 
         self.init_navbar()
         self.init_homepage()
@@ -87,25 +94,93 @@ class RianVideoProcessingTool(ctk.CTk):
         """Load the home/welcome page."""
         self.clear_content_frame()
 
-        # Adjust text layout to ensure proper wrapping
-        ctk.CTkLabel(
-            self.content_frame,
-            text="Welcome to Rian Video Processing Tool",
-            font=("Helvetica", 24, "bold"),
-            wraplength=800,  # Add wrap length
-            justify="center",  # Center-align the text
-        ).pack(pady=40)
+        # Fetch promotions every time the homepage loads (to reflect new updates)
+        self.promotions = fetch_promotions(self.client_id)
 
-        ctk.CTkLabel(
+        # Wrapper Box for the entire content
+        wrapper_box = ctk.CTkFrame(
             self.content_frame,
+            corner_radius=15,
+            fg_color="#e6e6e6",  # Light gray background for contrast
+            width=900,
+            height=650
+        )
+        wrapper_box.pack(padx=20, pady=20, fill="both", expand=True)
+
+        # Welcome Header
+        ctk.CTkLabel(
+            wrapper_box,
+            text="Welcome to Rian Video Processing Tool",
+            font=("Helvetica", 28, "bold"),
+            text_color="#1e3c72",  # A deep blue for emphasis
+            justify="center",
+        ).pack(pady=(30, 10))
+
+        # Subheader
+        ctk.CTkLabel(
+            wrapper_box,
             text=(
-                "This tool allows you to process videos locally or "
-                "download YouTube videos (including playlists) with ease."
+                "Your all-in-one solution for video processing and YouTube downloads.\n"
+                "Easily clean audio, process local videos, or download from YouTube."
             ),
             font=("Helvetica", 16),
-            wraplength=800,  # Add wrap length
-            justify="center",  # Center-align the text
-        ).pack(pady=10)
+            text_color="black",
+            wraplength=800,
+            justify="center",
+        ).pack(pady=(10, 30))
+
+        # Promotions Section Title
+        ctk.CTkLabel(
+            wrapper_box,
+            text="Current Promotions",
+            font=("Helvetica", 22, "bold"),
+            text_color="#1e3c72",
+            justify="center",
+        ).pack(pady=(10, 10))
+
+        # Display Promotions in a padded frame
+        promotions_frame = ctk.CTkFrame(
+            wrapper_box,
+            corner_radius=10,
+            fg_color="#ffffff",  # White background for promotions
+            width=850,
+            height=400
+        )
+        promotions_frame.pack(padx=10, pady=10, fill="both", expand=True)
+
+        self.display_promotions(promotions_frame)
+
+    def display_promotions(self, parent_frame):
+        """Display fetched promotions in styled boxes within the given parent frame."""
+        if not self.promotions or len(self.promotions) == 0:
+            ctk.CTkLabel(
+                parent_frame,
+                text="No promotions available at the moment.",
+                font=("Helvetica", 14),
+                fg_color="#f0f0f0",
+                text_color="black",
+                corner_radius=8,
+                width=800,
+                height=40,
+                justify="center"
+            ).pack(pady=10)
+            return
+
+        # Loop through promotions and display each
+        for promotion in self.promotions:
+            ctk.CTkLabel(
+                parent_frame,
+                text=promotion,
+                font=("Helvetica", 16),
+                fg_color="#f9f9f9",  # Light gray background for each promo
+                text_color="black",
+                corner_radius=8,
+                width=800,
+                height=50,
+                wraplength=780,
+                anchor="w",  # Left-aligned text
+                justify="left"
+            ).pack(pady=5, padx=10)
 
     ############################################################################
     #                       YOUTUBE DOWNLOAD PAGE
@@ -179,3 +254,9 @@ class RianVideoProcessingTool(ctk.CTk):
 
         progress_bar.pack(pady=10)
         ctk.CTkLabel(self.content_frame, textvariable=progress_label, font=("Helvetica", 14)).pack(pady=10)
+
+
+# Entry point if running as script:
+if __name__ == "__main__":
+    app = RianVideoProcessingTool()
+    app.mainloop()

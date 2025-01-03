@@ -18,7 +18,7 @@ from video_processor import process_video
 
 def process_local_video(app, progress_label, progress_bar):
     """
-    Let user pick a local video file, process it, then prompt for saving stems.
+    Let user pick a local video file, process it, and save stems.
     """
     file_path = filedialog.askopenfilename(
         title="Select a Video File",
@@ -35,21 +35,22 @@ def process_local_video(app, progress_label, progress_bar):
     function_type = "Local Video Upload"  # Define function type
 
     try:
+        # Calculate video length
         video_length_seconds = get_video_length(file_path)
         video_length_str = format_duration(video_length_seconds) if video_length_seconds else "Unknown"
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Separate audio (vocals/noise)
+            # Process video to extract vocals and noise
             vocals_path, noise_path, _ = process_video(file_path, Path(temp_dir))
 
-            # Choose folder to save the .wav files
+            # Prompt user to save the extracted files
             save_folder = filedialog.askdirectory(title="Choose folder to save extracted files")
             if not save_folder:
                 progress_label.set("Save operation canceled by user.")
                 append_to_log("Save operation canceled by user.")
                 return
 
-            # Move/rename
+            # Save processed files
             vocals_dest = Path(save_folder) / f"clean_{original_stem}.wav"
             noise_dest = Path(save_folder) / f"bg_{original_stem}.wav"
 
@@ -62,7 +63,7 @@ def process_local_video(app, progress_label, progress_bar):
         end_time = datetime.now()
         file_size = os.path.getsize(file_path)
 
-        # Log data with function type
+        # Construct log data
         log_data = {
             "ip": socket.gethostbyname(socket.gethostname()),
             "machine_name": platform.node(),
@@ -76,11 +77,11 @@ def process_local_video(app, progress_label, progress_bar):
             "file_size": file_size,
             "video_length": video_length_str,
             "processing_time": calculate_processing_time(start_time, end_time),
-            "type": "local",  # Correct type field
-            "function_type": function_type,  # Ensure function type is included
+            "type": "local",
+            "function_type": function_type,
             "status": "success",
         }
-        append_to_log(f"Sending log: {log_data}")  # Debugging log
+        append_to_log(f"Log data prepared: {log_data}")  # Debugging log
         send_log_to_server(log_data)
 
         # Update UI
@@ -91,28 +92,45 @@ def process_local_video(app, progress_label, progress_bar):
     except Exception as e:
         _handle_local_processing_error(app, e, file_path, start_time, progress_label, function_type)
 
-
 def _handle_local_processing_error(app, error_obj, file_path, start_time, progress_label, function_type):
-    """Handle errors for local video processing."""
-    error_message = f"{function_type}: Unexpected error during video processing: {error_obj}"
-    append_to_log(error_message)
-    progress_label.set("Processing failed.")
+    """
+    Handle errors during local video processing and log details.
+    """
+    try:
+        error_message = f"{function_type}: Unexpected error during video processing: {error_obj}"
+        append_to_log(error_message)
+        progress_label.set("Processing failed.")
 
-    send_log_to_server({
-        "ip": socket.gethostbyname(socket.gethostname()),
-        "machine_name": platform.node(),
-        "machine_specs": {
-            "os": platform.system(),
-            "os_version": platform.version(),
-            "machine": platform.machine(),
-        },
-        "start_time": start_time.isoformat(),
-        "end_time": datetime.now().isoformat(),
-        "file_size": os.path.getsize(file_path) if file_path else None,
-        "video_length": "Unknown",
-        "processing_time": calculate_processing_time(start_time, datetime.now()),
-        "type": "local",  # Correct type field
-        "function_type": function_type,  # Include function type
-        "status": "failure",
-        "error_logs": str(error_obj),
-    })
+        # Construct error log data
+        log_data = {
+            "ip": socket.gethostbyname(socket.gethostname()),
+            "machine_name": platform.node(),
+            "machine_specs": {
+                "os": platform.system(),
+                "os_version": platform.version(),
+                "machine": platform.machine(),
+            },
+            "start_time": start_time.isoformat(),
+            "end_time": datetime.now().isoformat(),
+            "file_size": os.path.getsize(file_path) if file_path else None,
+            "video_length": "Unknown",
+            "processing_time": calculate_processing_time(start_time, datetime.now()),
+            "type": "local",
+            "function_type": function_type,
+            "status": "failure",
+            "error_logs": str(error_obj),
+        }
+
+        # Ensure all required fields are included
+        required_keys = [
+            "ip", "machine_name", "machine_specs", "start_time", "end_time",
+            "file_size", "video_length", "processing_time", "type",
+            "function_type", "status", "error_logs",
+        ]
+        for key in required_keys:
+            if key not in log_data or log_data[key] is None:
+                raise ValueError(f"Missing required log field: {key}")
+
+        send_log_to_server(log_data)
+    except Exception as e:
+        append_to_log(f"Failed to handle error properly: {e}")
