@@ -4,12 +4,37 @@ import socket
 import requests
 import customtkinter as ctk
 from tkinter import messagebox
-from logger_utils import load_config, CONFIG, ENVIRONMENT, append_to_log
+from logger_utils import CONFIG, ENVIRONMENT, append_to_log
+
+CONFIG_FILE = "config.json"
 
 LICENSE_FILE = "license_data.json"  # Name of local JSON file to store license info
 
+def load_config():
+    """
+    Load configuration from config.json based on the current environment (ENVIRONMENT).
+    """
+    global CONFIG
+    try:
+        with open(CONFIG_FILE, "r") as config_file:
+            all_configs = json.load(config_file)
+            CONFIG = all_configs.get(ENVIRONMENT, {})
+            if not CONFIG:
+                raise ValueError(f"No configuration found for environment: {ENVIRONMENT}")
+        append_to_log(f"Configuration loaded for {ENVIRONMENT} environment: {CONFIG}")
+    except FileNotFoundError:
+        append_to_log("Error: Configuration file not found.")
+        raise
+    except json.JSONDecodeError:
+        append_to_log("Error: Invalid JSON in configuration file.")
+        raise
+    except Exception as e:
+        append_to_log(f"Error loading configuration: {e}")
+        raise
+
 # Load config for development/production
 load_config()
+
 
 def get_stored_license_data():
     """
@@ -112,11 +137,11 @@ def activate_license_with_server(client_id, license_key):
     """
     Activate the license key with the server.
     """
-    url = CONFIG.get("activate_license_url", "http://127.0.0.1:3000/VOXTools/ActivateLicense")
+    url = CONFIG.get("activate_license_url")
     payload = {"lk": license_key}
 
     try:
-        response = requests.post(url, json=payload, timeout=10)
+        response = requests.post(url, json=payload, timeout=10, verify=False)
         if response.status_code == 200:
             append_to_log("License activated successfully.")
             return True, ""
@@ -132,11 +157,11 @@ def validate_license_with_server(client_id, license_key):
     """
     Validate the license key with the server.
     """
-    url = CONFIG.get("validate_license_url", "http://127.0.0.1:3000/VOXTools/ValidateLicense")
+    url = CONFIG.get("validate_license_url")
     payload = {"lk": license_key}
 
     try:
-        response = requests.post(url, json=payload, timeout=10)
+        response = requests.post(url, json=payload, timeout=10, verify=False)
         if response.status_code == 200:
             append_to_log("License validated successfully.")
             return True, ""

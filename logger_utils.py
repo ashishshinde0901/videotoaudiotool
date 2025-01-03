@@ -31,13 +31,11 @@ def load_config():
             CONFIG = all_configs.get(ENVIRONMENT, {})
             if not CONFIG:
                 raise ValueError(f"No configuration found for environment: {ENVIRONMENT}")
-        append_to_log(f"Configuration loaded for {ENVIRONMENT} environment.")
+        append_to_log(f"Configuration loaded for {ENVIRONMENT} environment: {CONFIG}")
     except FileNotFoundError:
-        print("Error: Configuration file not found.")
         append_to_log("Error: Configuration file not found.")
         raise
     except json.JSONDecodeError:
-        print("Error: Invalid JSON in configuration file.")
         append_to_log("Error: Invalid JSON in configuration file.")
         raise
     except Exception as e:
@@ -100,7 +98,7 @@ def send_log_to_server(log_data):
         }
 
         append_to_log(f"Preparing to send log to server: {formatted_log}")
-        response = requests.post(server_url, json=formatted_log, timeout=10)
+        response = requests.post(server_url, json=formatted_log, timeout=10, verify=False)
         append_to_log(f"Response received: Status Code = {response.status_code}")
 
         if response.status_code == 200:
