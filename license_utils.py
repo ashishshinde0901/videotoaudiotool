@@ -65,6 +65,7 @@ def prompt_for_client_id_and_license_key(app, existing_client_id=""):
     popup.title("Enter License Details")
     popup.geometry("400x300")
     popup.resizable(False, False)
+    
 
     ctk.CTkLabel(
         popup,
@@ -107,6 +108,10 @@ def prompt_for_client_id_and_license_key(app, existing_client_id=""):
 
     def on_cancel():
         popup.destroy()
+        if app.winfo_exists():
+            app.destroy()  # Close the entire app when the Cancel button is pressed
+            
+    popup.protocol("WM_DELETE_WINDOW", on_cancel)
 
     ctk.CTkButton(popup, text="Submit", command=on_submit).pack(pady=(15, 5))
     ctk.CTkButton(popup, text="Cancel", command=on_cancel).pack()
@@ -116,7 +121,6 @@ def prompt_for_client_id_and_license_key(app, existing_client_id=""):
     app.wait_window(popup)
 
     return result["client_id"], result["license_key"]
-
 
 def activate_license_with_server(client_id, license_key):
     """
