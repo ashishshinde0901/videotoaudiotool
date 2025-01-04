@@ -34,25 +34,27 @@ def process_youtube_video(app, youtube_link_var, progress_label, progress_bar):
     video_length_str = None
 
     try:
+        # 1. Create a temporary directory for the download operation
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Download to temp_dir
+            # 2. Download videos + subtitles into temp_dir using youtube_downloader
             download_results = download_youtube_videos(link, temp_dir)
+
             video_paths = download_results.get("videos", [])
             subtitle_paths = download_results.get("subtitles", [])
 
             if not video_paths:
                 raise FileNotFoundError("No videos downloaded.")
             if not subtitle_paths:
-                append_to_log("No subtitles were available for download.")
+                append_to_log("No subtitles were found or available for download.")
 
-            # Ask user for folder
+            # 3. Prompt the user to select the final folder where files will be moved
             save_folder = filedialog.askdirectory(title="Choose folder to save the downloaded files")
             if not save_folder:
                 progress_label.set("Save operation canceled by user.")
                 append_to_log("Save operation canceled by user.")
                 return
 
-            # Move .mp4 files and subtitle files to chosen folder
+            # 4. Move .mp4 files and .srt subtitle files from temp_dir to the chosen folder
             total_size = 0
             max_duration = 0
 
@@ -60,27 +62,33 @@ def process_youtube_video(app, youtube_link_var, progress_label, progress_bar):
             for vp in video_paths:
                 size = os.path.getsize(vp)
                 total_size += size
+
+                # Attempt to get video duration for logging
                 length_seconds = get_video_length(vp)
                 if length_seconds and length_seconds > max_duration:
                     max_duration = length_seconds
 
+                # Move the video from temp_dir to the final destination
                 dest_path = Path(save_folder) / vp.name
                 shutil.move(str(vp), str(dest_path))
                 append_to_log(f"Video saved: {dest_path}")
 
             # Process subtitles
             for sp in subtitle_paths:
+                # Move each .srt file from temp_dir to the final destination
                 dest_path = Path(save_folder) / sp.name
                 shutil.move(str(sp), str(dest_path))
                 append_to_log(f"Subtitle saved: {dest_path}")
 
+            # 5. Prepare logging info
             file_size = total_size
             if max_duration > 0:
                 video_length_str = format_duration(max_duration)
 
+        # 6. After the with-block, temp_dir is automatically cleaned up
         end_time = datetime.utcnow()
 
-        # Log data with function type
+        # 7. Create JSON log data
         log_data = {
             "ip": socket.gethostbyname(socket.gethostname()),
             "machine_name": platform.node(),
@@ -100,11 +108,12 @@ def process_youtube_video(app, youtube_link_var, progress_label, progress_bar):
         }
         send_log_to_server(log_data)
 
-        # Update UI
+        # 8. Update UI status
         progress_label.set(
             f"Video(s) and subtitles downloaded successfully in {log_data['processing_time']:.2f} seconds."
         )
 
+    # --- Exception Handling ---
     except FileNotFoundError as fnf_err:
         _handle_download_error(app, progress_label, start_time, "file not found", fnf_err, "YouTube Download")
     except RuntimeError as rt_err:

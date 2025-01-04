@@ -6,14 +6,14 @@ from pathlib import Path
 from tkinter import filedialog, ttk
 import customtkinter as ctk
 
-# Import your logger utils
+# Logger utilities
 from logger_utils import (
     initialize_log_file,
     append_to_log,
     send_log_to_server,
 )
 
-# Import utilities and logic
+# Other utilities and logic
 from utils import (
     format_duration,
     calculate_processing_time,
@@ -22,8 +22,12 @@ from utils import (
 )
 import youtube_logic
 import local_processing_logic
-from license_utils import ensure_valid_license
-from promotions_utils import fetch_promotions  # Import promotions utility
+
+# License validation/activation logic
+from license_utils import ensure_valid_license_on_startup
+
+# Promotions utility
+from promotions_utils import fetch_promotions
 
 ###############################################################################
 #                      MAIN GUI APPLICATION CLASS
@@ -44,7 +48,7 @@ class RianVideoProcessingTool(ctk.CTk):
         ctk.set_default_color_theme("blue")
 
         # First, ensure valid license before anything else
-        ensure_valid_license(self)
+        ensure_valid_license_on_startup(self)
 
         # Initialize local log file
         initialize_log_file()
@@ -57,7 +61,7 @@ class RianVideoProcessingTool(ctk.CTk):
         self.content_frame.pack(side="right", expand=True, fill="both", padx=20, pady=20)
 
         self.promotions = []  # Store fetched promotions
-        self.client_id = socket.gethostname()  # Use client ID from license validation or default
+        self.client_id = socket.gethostname()  # Default client ID (can be updated if needed)
 
         self.init_navbar()
         self.init_homepage()
@@ -94,7 +98,7 @@ class RianVideoProcessingTool(ctk.CTk):
         """Load the home/welcome page."""
         self.clear_content_frame()
 
-        # Fetch promotions every time the homepage loads (to reflect new updates)
+        # Fetch promotions every time the homepage loads
         self.promotions = fetch_promotions(self.client_id)
 
         # Wrapper Box for the entire content
@@ -138,11 +142,11 @@ class RianVideoProcessingTool(ctk.CTk):
             justify="center",
         ).pack(pady=(10, 10))
 
-        # Display Promotions in a padded frame
+        # Display Promotions
         promotions_frame = ctk.CTkFrame(
             wrapper_box,
             corner_radius=10,
-            fg_color="#ffffff",  # White background for promotions
+            fg_color="#ffffff",
             width=850,
             height=400
         )
@@ -166,19 +170,18 @@ class RianVideoProcessingTool(ctk.CTk):
             ).pack(pady=10)
             return
 
-        # Loop through promotions and display each
         for promotion in self.promotions:
             ctk.CTkLabel(
                 parent_frame,
                 text=promotion,
                 font=("Helvetica", 16),
-                fg_color="#f9f9f9",  # Light gray background for each promo
+                fg_color="#f9f9f9",
                 text_color="black",
                 corner_radius=8,
                 width=800,
                 height=50,
                 wraplength=780,
-                anchor="w",  # Left-aligned text
+                anchor="w",
                 justify="left"
             ).pack(pady=5, padx=10)
 
@@ -193,35 +196,32 @@ class RianVideoProcessingTool(ctk.CTk):
         progress_bar = ttk.Progressbar(self.content_frame, orient="horizontal", mode="determinate", length=600)
         youtube_link_var = ctk.StringVar()
 
-        # Page Title
         ctk.CTkLabel(
             self.content_frame,
             text="Download YouTube Video or Playlist",
             font=("Helvetica", 18)
         ).pack(pady=20)
 
-        # Wider Entry for YouTube link
+        # Wider entry field
         ctk.CTkEntry(
             self.content_frame,
             textvariable=youtube_link_var,
             placeholder_text="Enter your YouTube link here",
-            width=600,  # Set width for the entry box
+            width=600,
         ).pack(pady=20)
 
-        # Download Button
         ctk.CTkButton(
             self.content_frame,
             text="Download",
             command=lambda: run_in_thread(
                 youtube_logic.process_youtube_video,
-                self,  # pass the app
+                self,
                 youtube_link_var,
                 progress_label,
                 progress_bar
             )
         ).pack(pady=20)
 
-        # Progress Bar and Label
         progress_bar.pack(pady=10)
         ctk.CTkLabel(
             self.content_frame,
@@ -246,7 +246,7 @@ class RianVideoProcessingTool(ctk.CTk):
             text="Upload File",
             command=lambda: run_in_thread(
                 local_processing_logic.process_local_video,
-                self,  # pass the app
+                self,
                 progress_label,
                 progress_bar
             ),
@@ -256,7 +256,7 @@ class RianVideoProcessingTool(ctk.CTk):
         ctk.CTkLabel(self.content_frame, textvariable=progress_label, font=("Helvetica", 14)).pack(pady=10)
 
 
-# Entry point if running as script:
+# Entry point if running as script
 if __name__ == "__main__":
     app = RianVideoProcessingTool()
     app.mainloop()

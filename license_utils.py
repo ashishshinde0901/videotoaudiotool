@@ -4,11 +4,13 @@ import socket
 import requests
 import customtkinter as ctk
 from tkinter import messagebox
+
+# Your logger imports (assuming these exist in your project)
 from logger_utils import CONFIG, ENVIRONMENT, append_to_log
+from stored_license_data import get_stored_license_data, store_license_data
 
 CONFIG_FILE = "config.json"
 
-LICENSE_FILE = "license_data.json"  # Name of local JSON file to store license info
 
 def load_config():
     """
@@ -35,41 +37,6 @@ def load_config():
 # Load config for development/production
 load_config()
 
-
-def get_stored_license_data():
-    """
-    Load previously stored license data from a JSON file if it exists.
-    Returns a dict { "client_id": ..., "license_key": ... } or None if missing/invalid.
-    """
-    if not os.path.exists(LICENSE_FILE):
-        return None
-
-    try:
-        with open(LICENSE_FILE, "r") as file:
-            data = json.load(file)
-            if "client_id" in data and "license_key" in data:
-                return data
-            else:
-                return None
-    except Exception as e:
-        append_to_log(f"Error reading license data: {e}")
-        return None
-
-def store_license_data(client_id, license_key):
-    """
-    Store the client_id and license_key to a local file in JSON format.
-    Overwrites any existing data.
-    """
-    data = {
-        "client_id": client_id,
-        "license_key": license_key
-    }
-    try:
-        with open(LICENSE_FILE, "w") as file:
-            json.dump(data, file)
-        append_to_log("License data stored successfully.")
-    except Exception as e:
-        append_to_log(f"Error storing license data: {e}")
 
 def prompt_for_client_id_and_license_key(app, existing_client_id=""):
     """
@@ -133,6 +100,7 @@ def prompt_for_client_id_and_license_key(app, existing_client_id=""):
 
     return result["client_id"], result["license_key"]
 
+
 def activate_license_with_server(client_id, license_key):
     """
     Activate the license key with the server.
@@ -142,16 +110,26 @@ def activate_license_with_server(client_id, license_key):
 
     try:
         response = requests.post(url, json=payload, timeout=10, verify=False)
+        append_to_log(f"Activate License Response: Status Code = {response.status_code}, Body = {response.text}")
+
         if response.status_code == 200:
-            append_to_log("License activated successfully.")
-            return True, ""
+            try:
+                response_json = response.json()
+                append_to_log(f"Activation Response JSON: {response_json}")
+                return True, ""
+            except json.JSONDecodeError:
+                append_to_log("Error: Server returned non-JSON response during activation.")
+                return False, "Server returned invalid response. Please contact support."
         else:
-            error_reason = response.json().get("error", "Unknown error")
-            append_to_log(f"License activation failed: {error_reason}")
-            return False, error_reason
+            try:
+                error_reason = response.json().get("error", "Unknown error")
+                return False, error_reason
+            except json.JSONDecodeError:
+                return False, f"Unexpected server response: {response.text}"
     except requests.RequestException as e:
         append_to_log(f"Network error during license activation: {e}")
         return False, f"Network error: {e}"
+
 
 def validate_license_with_server(client_id, license_key):
     """
@@ -162,53 +140,90 @@ def validate_license_with_server(client_id, license_key):
 
     try:
         response = requests.post(url, json=payload, timeout=10, verify=False)
+        append_to_log(f"Validate License Response: Status Code = {response.status_code}, Body = {response.text}")
+
         if response.status_code == 200:
-            append_to_log("License validated successfully.")
-            return True, ""
+            try:
+                response_json = response.json()
+                append_to_log(f"Validation Response JSON: {response_json}")
+                return True, ""
+            except json.JSONDecodeError:
+                append_to_log("Error: Server returned non-JSON response during validation.")
+                return False, "Server returned invalid response. Please contact support."
         else:
-            error_reason = response.json().get("error", "Unknown error")
-            append_to_log(f"License validation failed: {error_reason}")
-            return False, error_reason
+            try:
+                error_reason = response.json().get("error", "Unknown error")
+                return False, error_reason
+            except json.JSONDecodeError:
+                return False, f"Unexpected server response: {response.text}"
     except requests.RequestException as e:
         append_to_log(f"Network error during license validation: {e}")
         return False, f"Network error: {e}"
 
-def ensure_valid_license(app):
+
+def ensure_valid_license_on_startup(app):
     """
-    Ensures that a valid license key is present locally and verified by the server.
-    If no license is stored or it's invalid, activates or prompts user to re-enter a valid key.
+    Validates the license every time the application is launched.
+    Ensures that a valid license key is stored locally and verified by the server.
+    Prompts the user for a new license key if validation fails without exiting the app.
+    
+    Behavior:
+     - If stored_data exists, call validate:
+         - If validate is good, break.
+         - Else, prompt user to re-enter and call activate.
+           If activate is successful, store immediately and break.
+           Otherwise keep prompting.
+     - If no stored_data, prompt user for ID/key, call activate:
+         - If activate is successful, store immediately and break.
+         - Otherwise keep prompting.
     """
+
     stored_data = get_stored_license_data()
 
     if stored_data:
         client_id = stored_data["client_id"]
         license_key = stored_data["license_key"]
     else:
-        # Default client_id to machine hostname
+        # Default client_id to machine hostname on first time
         client_id = socket.gethostname()
         license_key = ""
 
     while True:
+        # If we already have something stored, attempt validation first
         if client_id and license_key:
             valid, reason = validate_license_with_server(client_id, license_key)
             if valid:
+                append_to_log(f"License validated successfully for client: {client_id}")
+                # Re-store to ensure any local updates are consistent
                 store_license_data(client_id, license_key)
-                return  # License verified
+                break
             else:
                 append_to_log(f"License validation failed: {reason}")
                 msg = f"Your license key is invalid or revoked.\nReason: {reason}\nPlease re-enter."
-                messagebox.showwarning("Invalid License", msg)
+                messagebox.showerror("Invalid License", msg)
 
-                new_client_id, new_license_key = prompt_for_client_id_and_license_key(app, existing_client_id=client_id)
-                if not new_client_id or not new_license_key:
-                    app.destroy()
-                    return
-                activate_license_with_server(new_client_id, new_license_key)
-                client_id, license_key = new_client_id, new_license_key
-        else:
-            new_client_id, new_license_key = prompt_for_client_id_and_license_key(app, existing_client_id=client_id)
-            if not new_client_id or not new_license_key:
-                app.destroy()
-                return
-            activate_license_with_server(new_client_id, new_license_key)
+        # Prompt the user for new license details (or first-time user)
+        new_client_id, new_license_key = prompt_for_client_id_and_license_key(app, existing_client_id=client_id)
+        if not new_client_id or not new_license_key:
+            # Show a warning if the user cancels or enters nothing
+            messagebox.showwarning(
+                "License Required",
+                "You must enter a valid Client ID and License Key to use the application."
+            )
+            continue  # Keep re-prompting
+
+        # Try to activate with the newly provided info
+        activation_success, activation_reason = activate_license_with_server(new_client_id, new_license_key)
+        if activation_success:
+            # If activation is successful, store data immediately, log success, and break out
             client_id, license_key = new_client_id, new_license_key
+            store_license_data(client_id, license_key)
+            append_to_log("License activated successfully.")
+            break
+        else:
+            # Activation failed, show error and re-prompt
+            append_to_log(f"License activation failed: {activation_reason}")
+            messagebox.showerror(
+                "License Activation Failed",
+                f"Reason: {activation_reason}\nPlease re-enter your credentials."
+            )

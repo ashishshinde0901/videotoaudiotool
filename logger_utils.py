@@ -5,7 +5,7 @@ import requests
 import json
 from datetime import datetime, timezone
 
-from project.license_utils import get_stored_license_data
+from stored_license_data import get_stored_license_data
 
 # Global variables
 CONFIG_FILE = "config.json"
