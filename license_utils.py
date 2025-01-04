@@ -8,35 +8,52 @@ from tkinter import messagebox
 # Your logger imports (assuming these exist in your project)
 from logger_utils import CONFIG, ENVIRONMENT, append_to_log
 from stored_license_data import get_stored_license_data, store_license_data
+import sys
 
 CONFIG_FILE = "config.json"
 
 
+def get_resource_path(relative_path):
+    """
+    Get absolute path to resource, works for dev and PyInstaller.
+    """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except AttributeError:
+        # Development environment: Use the current directory
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+
 def load_config():
     """
-    Load configuration from config.json based on the current environment (ENVIRONMENT).
+    Load configuration from config.json based on the current environment.
+    Supports both development and bundled (PyInstaller) environments.
     """
     global CONFIG
+    config_path = get_resource_path(CONFIG_FILE)
+
     try:
-        with open(CONFIG_FILE, "r") as config_file:
+        with open(config_path, "r") as config_file:
             all_configs = json.load(config_file)
             CONFIG = all_configs.get(ENVIRONMENT, {})
             if not CONFIG:
                 raise ValueError(f"No configuration found for environment: {ENVIRONMENT}")
         append_to_log(f"Configuration loaded for {ENVIRONMENT} environment: {CONFIG}")
     except FileNotFoundError:
-        append_to_log("Error: Configuration file not found.")
+        append_to_log(f"Error: Configuration file not found at path: {config_path}")
         raise
     except json.JSONDecodeError:
-        append_to_log("Error: Invalid JSON in configuration file.")
+        append_to_log(f"Error: Invalid JSON in configuration file at path: {config_path}")
         raise
     except Exception as e:
         append_to_log(f"Error loading configuration: {e}")
         raise
 
+
 # Load config for development/production
 load_config()
-
 
 def prompt_for_client_id_and_license_key(app, existing_client_id=""):
     """
