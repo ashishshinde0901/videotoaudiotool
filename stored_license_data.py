@@ -22,7 +22,7 @@ def get_stored_license_data():
             else:
                 return None
     except Exception as e:
-        append_to_log(f"Error reading license data: {e}")
+        
         return None
 
 def store_license_data(client_id, license_key):
@@ -37,6 +37,6 @@ def store_license_data(client_id, license_key):
     try:
         with open(LICENSE_FILE, "w") as file:
             json.dump(data, file)
-        append_to_log("License data stored successfully.")
+        
     except Exception as e:
-        append_to_log(f"Error storing license data: {e}")
+        
